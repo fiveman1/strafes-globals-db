@@ -1,0 +1,38 @@
+{
+    "name": "strafes-globals-db",
+    "version": "1.0.0",
+    "description": "Globals/world record tracking for StrafesNET games",
+    "main": "index.js",
+    "scripts": {
+        "dev": "tsx src/index.ts",
+        "build": "tsc",
+        "start": "node dist/index.js"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/fiveman1/strafes-globals-db.git"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "type": "module",
+    "bugs": {
+        "url": "https://github.com/fiveman1/strafes-globals-db/issues"
+    },
+    "homepage": "https://github.com/fiveman1/strafes-globals-db#readme",
+    "devDependencies": {
+        "@types/node": "^25.0.3",
+        "eslint": "^9.39.2",
+        "globals": "^17.0.0",
+        "jiti": "^2.6.1",
+        "prettier": "^3.7.4",
+        "ts-node": "^10.9.2",
+        "tsx": "^4.21.0",
+        "typescript": "^5.9.3",
+        "typescript-eslint": "^8.51.0"
+    },
+    "dependencies": {
+        "dotenv": "^17.2.3",
+        "mysql2": "^3.16.0"
+    }
+}
