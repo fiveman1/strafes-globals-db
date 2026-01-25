@@ -7,6 +7,7 @@ dotenv.config();
 interface Record {
     time_id: bigint,
     user_id: bigint,
+    username: string,
     map_id: bigint,
     game: number,
     style: number,
@@ -45,6 +46,7 @@ async function main() {
     let query = `CREATE TABLE IF NOT EXISTS globals (
         time_id bigint NOT NULL,
         user_id bigint NOT NULL,
+        username varchar(64) NOT NULL,
         map_id bigint NOT NULL,
         game int NOT NULL,
         style int NOT NULL,
@@ -63,6 +65,7 @@ async function main() {
     const rows = wrs.map((record) => [
         record.time_id,
         record.user_id,
+        record.username,
         record.map_id,
         record.game,
         record.style,
@@ -74,7 +77,7 @@ async function main() {
     query = `TRUNCATE TABLE globals;`;
     await connection.query(query);
 
-    query = `INSERT INTO globals (time_id, user_id, map_id, game, style, course, date, time) VALUES ?`;
+    query = `INSERT INTO globals (time_id, user_id, username, map_id, game, style, course, date, time) VALUES ?`;
     const [inserted] = await connection.query<ResultSetHeader>(query, [rows]);
     console.log("Inserted rows: " + inserted.affectedRows);
 
@@ -124,6 +127,7 @@ async function loadWRs(strafesKey: string): Promise<Record[]> {
                 wrs.push({
                     time_id: record.id,
                     user_id: record.user.id,
+                    username: record.user.username,
                     map_id: record.map.id,
                     game: record.game_id,
                     style: record.style_id,
