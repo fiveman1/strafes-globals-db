@@ -43,10 +43,17 @@ async function main() {
         supportBigNumbers: true
     });
 
-    let query = `CREATE TABLE IF NOT EXISTS globals (
-        time_id bigint NOT NULL,
+    let query = `CREATE TABLE IF NOT EXISTS users (
         user_id bigint NOT NULL,
         username varchar(64) NOT NULL,
+        PRIMARY KEY (user_id)
+    );`;
+
+    await connection.query(query);
+
+    query = `CREATE TABLE IF NOT EXISTS globals (
+        time_id bigint NOT NULL,
+        user_id bigint NOT NULL,
         map_id bigint NOT NULL,
         game int NOT NULL,
         style int NOT NULL,
@@ -54,6 +61,7 @@ async function main() {
         date datetime NOT NULL,
         time int NOT NULL,
         PRIMARY KEY (time_id),
+        FOREIGN KEY (user_id) REFERENCES users(user_id),
         UNIQUE INDEX map_index (map_id, game, style, course),
         INDEX user_index (user_id)
     );`;
@@ -62,10 +70,21 @@ async function main() {
 
     const wrs = await loadWRs(strafesKey);
 
-    const rows = wrs.map((record) => [
+    const userIdSet = new Set<bigint>();
+    const userRows = [];
+    for (const wr of wrs) {
+        if (userIdSet.has(wr.user_id)) continue;
+        userIdSet.add(wr.user_id);
+        userRows.push([wr.user_id, wr.username]);
+    }
+
+    query = `INSERT INTO users (user_id, username) VALUES ? ON DUPLICATE KEY UPDATE user_id=user_id, username=username;`
+    const [usersInserted] = await connection.query<ResultSetHeader>(query, [userRows]);
+    console.log("Inserted user rows: " + usersInserted.affectedRows);
+
+    const wrRows = wrs.map((record) => [
         record.time_id,
         record.user_id,
-        record.username,
         record.map_id,
         record.game,
         record.style,
@@ -77,9 +96,9 @@ async function main() {
     query = `TRUNCATE TABLE globals;`;
     await connection.query(query);
 
-    query = `INSERT INTO globals (time_id, user_id, username, map_id, game, style, course, date, time) VALUES ?`;
-    const [inserted] = await connection.query<ResultSetHeader>(query, [rows]);
-    console.log("Inserted rows: " + inserted.affectedRows);
+    query = `INSERT INTO globals (time_id, user_id, map_id, game, style, course, date, time) VALUES ?`;
+    const [inserted] = await connection.query<ResultSetHeader>(query, [wrRows]);
+    console.log("Inserted WR rows: " + inserted.affectedRows);
 
     await connection.end();
     process.exitCode = 0;
