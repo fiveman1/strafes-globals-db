@@ -78,7 +78,7 @@ async function main() {
         userRows.push([wr.user_id, wr.username]);
     }
 
-    query = `INSERT INTO users (user_id, username) VALUES ? ON DUPLICATE KEY UPDATE user_id=user_id, username=username;`
+    query = `INSERT INTO users (user_id, username) VALUES ? AS new ON DUPLICATE KEY UPDATE username=new.username;`
     const [usersInserted] = await connection.query<ResultSetHeader>(query, [userRows]);
     console.log("Inserted user rows: " + usersInserted.affectedRows);
 
