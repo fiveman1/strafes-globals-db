@@ -22,7 +22,12 @@ Install MySQL and create a database named `strafes_globals`.
 
 `npm run dev`
 
+To seed (download all WRs at once):`npm run dev-seed`
+
 ### Run prod
 
 `npm run build`
+
 `npm run start`
+
+To seed (download all WRs at once): `npm run seed`

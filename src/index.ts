@@ -5,16 +5,23 @@ import axios, { type AxiosResponse } from "axios";
 dotenv.config();
 
 interface Record {
-    time_id: bigint,
-    user_id: bigint,
+    time_id: number,
+    user_id: number,
     username: string,
-    map_id: bigint,
+    map_id: number,
     game: number,
     style: number,
     course: number,
     date: Date,
     time: number
 }
+
+enum Mode {
+    Seed,
+    Refresh
+}
+
+const STRAFES_KEY = process.env.STRAFES_KEY;
 
 async function main() {
     const user = process.env.DB_USER;
@@ -25,12 +32,19 @@ async function main() {
         return;
     }
 
-    const strafesKey = process.env.STRAFES_KEY;
-    if (!strafesKey) {
+    if (!STRAFES_KEY) {
         console.error("Missing strafes API key");
         process.exitCode = 1;
         return;
     }
+
+    const args = process.argv.splice(2);
+    let mode = Mode.Refresh;
+    if (args[0] === "seed") {
+        mode = Mode.Seed;
+    }
+
+    console.log(`Running in '${Mode[mode].toLowerCase()}' mode`);
 
     // CREATE DATABASE strafes_globals;
     const connection = await mysql.createConnection({
@@ -68,19 +82,83 @@ async function main() {
 
     await connection.query(query);
 
-    const wrs = await loadWRs(strafesKey);
-
-    const userIdSet = new Set<bigint>();
-    const userRows = [];
-    for (const wr of wrs) {
-        if (userIdSet.has(wr.user_id)) continue;
-        userIdSet.add(wr.user_id);
-        userRows.push([wr.user_id, wr.username]);
+    if (mode === Mode.Seed) {
+        await seedWRs(connection);
+    }
+    else {
+        await refreshWRs(connection);
     }
 
-    query = `INSERT INTO users (user_id, username) VALUES ? AS new ON DUPLICATE KEY UPDATE username=new.username;`
-    const [usersInserted] = await connection.query<ResultSetHeader>(query, [userRows]);
-    console.log("Inserted user rows: " + usersInserted.affectedRows);
+    await connection.end();
+    process.exitCode = 0;
+}
+
+async function refreshWRs(connection: mysql.Connection) {
+    const response = await tryGetStrafes("time/worldrecord", {
+        page_number: 1,
+        page_size: 100
+    });
+
+    if (!response) {
+        return;
+    }
+
+    const data = response.data.data as any[];
+    const wrs : Record[] = [];
+    const timeIds = new Set<number>();
+    
+    for (const record of data) {
+        if (timeIds.has(record.id)) {
+            continue;
+        }
+        timeIds.add(record.id);
+        wrs.push({
+            time_id: record.id,
+            user_id: record.user.id,
+            username: record.user.username,
+            map_id: record.map.id,
+            game: record.game_id,
+            style: record.style_id,
+            course: record.mode_id,
+            date: new Date(record.date),
+            time: record.time
+        });
+    }
+
+    await insertUsers(connection, wrs);
+
+    const wrRows = wrs.map((record) => [
+        record.time_id,
+        record.user_id,
+        record.map_id,
+        record.game,
+        record.style,
+        record.course,
+        record.date,
+        record.time
+    ]);
+
+    const query = `INSERT INTO globals (time_id, user_id, map_id, game, style, course, date, time) 
+        VALUES ? AS new 
+        ON DUPLICATE KEY UPDATE
+            time_id=new.time_id,
+            user_id=new.user_id,
+            map_id=new.map_id,
+            game=new.game,
+            style=new.style,
+            course=new.course,
+            date=new.date,
+            time=new.time
+    ;`;
+
+    const [inserted] = await connection.query<ResultSetHeader>(query, [wrRows]);
+    console.log("Inserted WR rows: " + inserted.affectedRows);
+}
+
+async function seedWRs(connection: mysql.Connection) {
+    const wrs = await loadAllWRs();
+
+    await insertUsers(connection, wrs);
 
     const wrRows = wrs.map((record) => [
         record.time_id,
@@ -93,18 +171,15 @@ async function main() {
         record.time
     ]);
     
-    query = `TRUNCATE TABLE globals;`;
+    let query = `TRUNCATE TABLE globals;`;
     await connection.query(query);
 
     query = `INSERT INTO globals (time_id, user_id, map_id, game, style, course, date, time) VALUES ?`;
     const [inserted] = await connection.query<ResultSetHeader>(query, [wrRows]);
     console.log("Inserted WR rows: " + inserted.affectedRows);
-
-    await connection.end();
-    process.exitCode = 0;
 }
 
-async function loadWRs(strafesKey: string): Promise<Record[]> {
+async function loadAllWRs(): Promise<Record[]> {
     const wrs : Record[] = [];
     const timeIds = new Set<number>();
 
@@ -115,7 +190,7 @@ async function loadWRs(strafesKey: string): Promise<Record[]> {
         console.log("Loading page " + page);
         const promises: Promise<AxiosResponse<any, any> | undefined>[] = [];
         for (let i = 0; i < 5; ++i) {
-            promises.push(tryGetStrafes(strafesKey, "time/worldrecord", {
+            promises.push(tryGetStrafes("time/worldrecord", {
                 page_number: page + i,
                 page_size: 100
             }));
@@ -169,13 +244,27 @@ async function loadWRs(strafesKey: string): Promise<Record[]> {
     return wrs;
 }
 
+async function insertUsers(connection: mysql.Connection, wrs: Record[]) {
+    const userIdSet = new Set<number>();
+    const userRows = [];
+    for (const wr of wrs) {
+        if (userIdSet.has(wr.user_id)) continue;
+        userIdSet.add(wr.user_id);
+        userRows.push([wr.user_id, wr.username]);
+    }
+
+    const query = `INSERT INTO users (user_id, username) VALUES ? AS new ON DUPLICATE KEY UPDATE username=new.username;`;
+    const [usersInserted] = await connection.query<ResultSetHeader>(query, [userRows]);
+    console.log("Inserted user rows: " + usersInserted.affectedRows);
+}
+
 async function sleep(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function tryGetStrafes(strafesKey: string, end_of_url: string, params?: any) {
+async function tryGetStrafes(end_of_url: string, params?: any) {
     const headers = {
-        "X-API-Key": strafesKey
+        "X-API-Key": STRAFES_KEY
     };
     return await tryGetRequest(`https://api.strafes.net/api/v1/${end_of_url}`, params, headers);
 }
