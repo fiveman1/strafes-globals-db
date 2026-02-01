@@ -263,11 +263,23 @@ async function updateMaps(connection: mysql.Connection) {
         map.loadCount,
         map.modes
     ]);
-    
-    let query = `TRUNCATE TABLE maps;`;
-    await connection.query(query);
 
-    query = `INSERT INTO maps (map_id, name, creator, game, date, created_at, updated_at, submitter, small_thumb, large_thumb, asset_version, load_count, modes) VALUES ?`;
+    const query = `INSERT INTO maps (map_id, name, creator, game, date, created_at, updated_at, submitter, small_thumb, large_thumb, asset_version, load_count, modes) 
+        VALUES ? AS new 
+        ON DUPLICATE KEY UPDATE 
+            name=new.name,
+            creator=new.creator,
+            game=new.game,
+            date=new.date,
+            created_at=new.created_at,
+            updated_at=new.updated_at,
+            submitter=new.submitter,
+            small_thumb=new.small_thumb,
+            large_thumb=new.large_thumb,
+            asset_version=new.asset_version,
+            load_count=new.load_count,
+            modes=new.modes
+    ;`;
     const [inserted] = await connection.query<ResultSetHeader>(query, [mapRows]);
     console.log("Inserted map rows: " + inserted.affectedRows);
 
