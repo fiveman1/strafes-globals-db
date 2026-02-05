@@ -69,7 +69,6 @@ async function main() {
         password: password,
         database: "strafes_globals",
         timezone: "Z", // UTC
-        dateStrings: true,
         supportBigNumbers: true
     });
 
