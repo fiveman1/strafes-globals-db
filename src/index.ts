@@ -167,6 +167,29 @@ async function refreshWRs(connection: mysql.Connection) {
         return false;
     }
 
+    await insertGlobals(connection, wrs);
+
+    return true;
+}
+
+async function seedWRs(connection: mysql.Connection) {
+    if (!(await updateMaps(connection))) {
+        return false;
+    }
+    
+    const wrs = await loadAllWRs();
+
+    await insertUsers(connection, wrs);
+    
+    const query = `TRUNCATE TABLE globals;`;
+    await connection.query(query);
+
+    await insertGlobals(connection, wrs);
+
+    return true;
+}
+
+async function insertGlobals(connection: mysql.Connection, wrs: Record[]) {
     const wrRows = wrs.map((record) => [
         record.timeId,
         record.userId,
@@ -193,38 +216,6 @@ async function refreshWRs(connection: mysql.Connection) {
 
     const [inserted] = await connection.query<ResultSetHeader>(query, [wrRows]);
     console.log("Inserted WR rows: " + inserted.affectedRows);
-
-    return true;
-}
-
-async function seedWRs(connection: mysql.Connection) {
-    if (!(await updateMaps(connection))) {
-        return false;
-    }
-    
-    const wrs = await loadAllWRs();
-
-    await insertUsers(connection, wrs);
-
-    const wrRows = wrs.map((record) => [
-        record.timeId,
-        record.userId,
-        record.mapId,
-        record.game,
-        record.style,
-        record.course,
-        record.date,
-        record.time
-    ]);
-    
-    let query = `TRUNCATE TABLE globals;`;
-    await connection.query(query);
-
-    query = `INSERT INTO globals (time_id, user_id, map_id, game, style, course, date, time) VALUES ?`;
-    const [inserted] = await connection.query<ResultSetHeader>(query, [wrRows]);
-    console.log("Inserted WR rows: " + inserted.affectedRows);
-
-    return true;
 }
 
 async function wrsHaveMapsLoaded(connection: mysql.Connection, wrs: Record[]) {
