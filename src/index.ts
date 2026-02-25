@@ -14,6 +14,7 @@ interface Record {
     course: number
     date: Date
     time: number
+    hasBot: boolean
 }
 
 interface StrafesMap {
@@ -108,6 +109,7 @@ async function main() {
         course smallint NOT NULL,
         date datetime NOT NULL,
         time int NOT NULL,
+        has_bot boolean NOT NULL DEFAULT FALSE,
         PRIMARY KEY (time_id),
         FOREIGN KEY (user_id) REFERENCES users(user_id),
         FOREIGN KEY (map_id) REFERENCES maps(map_id),
@@ -157,7 +159,8 @@ async function refreshWRs(connection: mysql.Connection) {
             style: record.style_id,
             course: record.mode_id,
             date: new Date(record.date),
-            time: record.time
+            time: record.time,
+            hasBot: record.has_bot
         });
     }
 
@@ -198,10 +201,11 @@ async function insertGlobals(connection: mysql.Connection, wrs: Record[]) {
         record.style,
         record.course,
         record.date,
-        record.time
+        record.time,
+        record.hasBot
     ]);
 
-    const query = `INSERT INTO globals (time_id, user_id, map_id, game, style, course, date, time) 
+    const query = `INSERT INTO globals (time_id, user_id, map_id, game, style, course, date, time, has_bot) 
         VALUES ? AS new 
         ON DUPLICATE KEY UPDATE
             time_id=new.time_id,
@@ -211,7 +215,8 @@ async function insertGlobals(connection: mysql.Connection, wrs: Record[]) {
             style=new.style,
             course=new.course,
             date=new.date,
-            time=new.time
+            time=new.time,
+            has_bot=new.has_bot
     ;`;
 
     const [inserted] = await connection.query<ResultSetHeader>(query, [wrRows]);
@@ -422,7 +427,8 @@ async function loadAllWRs(): Promise<Record[]> {
                     style: record.style_id,
                     course: record.mode_id,
                     date: new Date(record.date),
-                    time: record.time
+                    time: record.time,
+                    hasBot: record.has_bot
                 });
             }
         }
