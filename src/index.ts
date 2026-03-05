@@ -5,7 +5,7 @@ import axios, { type AxiosResponse } from "axios";
 dotenv.config();
 
 interface Record {
-    timeId: number
+    timeId: string
     userId: number
     username: string
     mapId: number
@@ -70,7 +70,8 @@ async function main() {
         password: password,
         database: "strafes_globals",
         timezone: "Z", // UTC
-        supportBigNumbers: true
+        supportBigNumbers: true,
+        bigNumberStrings: true
     });
 
     let query = `CREATE TABLE IF NOT EXISTS users (
@@ -193,17 +194,32 @@ async function seedWRs(connection: mysql.Connection) {
 }
 
 async function insertGlobals(connection: mysql.Connection, wrs: Record[]) {
-    const wrRows = wrs.map((record) => [
-        record.timeId,
-        record.userId,
-        record.mapId,
-        record.game,
-        record.style,
-        record.course,
-        record.date,
-        record.time,
-        record.hasBot
-    ]);
+    const keyToTime = await getRecentWrsFromDB(connection);
+
+    const wrRows: (string | number | boolean | Date)[][] = [];
+
+    for (const record of wrs) {
+        const recentWr = keyToTime.get(getRecordKey(record));
+        if (recentWr && record.date <= recentWr.date) {
+            // The strafes site cached a more recent WR, don't overwrite it
+            continue;
+        }
+        wrRows.push([
+            record.timeId,
+            record.userId,
+            record.mapId,
+            record.game,
+            record.style,
+            record.course,
+            record.date,
+            record.time,
+            record.hasBot
+        ]);
+    }
+
+    if (wrRows.length < 1) {
+        return;
+    }
 
     const query = `INSERT INTO globals (time_id, user_id, map_id, game, style, course, date, time, has_bot) 
         VALUES ? AS new 
@@ -221,6 +237,48 @@ async function insertGlobals(connection: mysql.Connection, wrs: Record[]) {
 
     const [inserted] = await connection.query<ResultSetHeader>(query, [wrRows]);
     console.log("Inserted WR rows: " + inserted.affectedRows);
+}
+
+type RecordRow = RowDataPacket & {
+    timeId: string
+    userId: string
+    mapId: string
+    game: number
+    style: number
+    course: number
+    date: Date
+    time: number
+    hasBot: number
+}
+
+function getRecordKey(record: Record | RecordRow) {
+    return `${record.mapId}|${record.game}|${record.style}|${record.course}`;
+}
+
+async function getRecentWrsFromDB(connection: mysql.Connection) {
+    const keyToTime = new Map<string, Record>();
+
+    const query = `SELECT time_id as timeId, user_id as userId, map_id as mapId, game, style, course, date, time, has_bot as hasBot FROM globals
+        WHERE date >= UTC_TIMESTAMP() - INTERVAL 2 HOUR
+    ;`;
+
+    const [rows] = await connection.query<RecordRow[]>(query);
+    for (const row of rows) {
+        keyToTime.set(getRecordKey(row), {
+            timeId: row.timeId,
+            userId: +row.userId,
+            username: "",
+            mapId: +row.mapId,
+            game: row.game,
+            style: row.style,
+            course: row.course,
+            date: row.date,
+            time: row.time,
+            hasBot: row.hasBot === 1
+        });
+    }
+
+    return keyToTime;
 }
 
 async function wrsHaveMapsLoaded(connection: mysql.Connection, wrs: Record[]) {
