@@ -367,20 +367,37 @@ async function loadMaps() {
             }
         }
 
-        const largeReqPromise = tryGetRequest("https://thumbnails.roproxy.com/v1/assets", {
+        let largeReq = await tryGetRequest("https://thumbnails.roproxy.com/v1/assets", {
             "assetIds": assetIds,
             "size": "420x420",
             "format": "Webp"
         });
+
+        // Retry once after a delay
+        if (!largeReq) {
+            await sleep(3000);
+            largeReq = await tryGetRequest("https://thumbnails.roproxy.com/v1/assets", {
+                "assetIds": assetIds,
+                "size": "420x420",
+                "format": "Webp"
+            });
+        }
         
-        const smallReqPromise = tryGetRequest("https://thumbnails.roproxy.com/v1/assets", {
+        let smallReq = await tryGetRequest("https://thumbnails.roproxy.com/v1/assets", {
             "assetIds": assetIds,
             "size": "75x75",
             "format": "Webp"
         });
 
-        const largeReq = await largeReqPromise;
-        const smallReq = await smallReqPromise;
+        // Retry once after a delay
+        if (!smallReq) {
+            await sleep(3000);
+            smallReq = await tryGetRequest("https://thumbnails.roproxy.com/v1/assets", {
+                "assetIds": assetIds,
+                "size": "75x75",
+                "format": "Webp"
+            });
+        }
 
         if (largeReq) {
             for (const assetInfo of largeReq.data.data) {
